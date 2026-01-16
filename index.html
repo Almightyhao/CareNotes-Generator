@@ -3,18 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DI 藥師衛教單張自動化工具</title>
+    <title>DI 藥師衛教單張自動化工具 (含 PDF 解析)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // 設定 PDF.js Worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <style>
         body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f3f4f6; }
-        .fixed-phrase { color: #b91c1c; font-weight: bold; font-size: 0.9em; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 2s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="p-6">
 
 <div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-8">
     <h1 class="text-2xl font-bold text-blue-700 mb-2">🏥 藥品衛教單張 Prompt 生成器</h1>
-    <p class="text-gray-600 mb-6 text-sm">將 UpToDate/Micromedex 內容轉換為標準化 Prompt，供 AI 生成繁體中文衛教單張。</p>
+    <p class="text-gray-600 mb-6 text-sm">支援上傳 PDF (UpToDate/Micromedex) 或直接貼上文字，一鍵生成 AI 指令。</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
@@ -28,19 +44,27 @@
     </div>
 
     <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700">藥品廢棄類別 (決定廢棄語句)</label>
+        <label class="block text-sm font-medium text-gray-700">藥品廢棄類別</label>
         <select id="drugCategory" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 bg-gray-50">
             <option value="general">一般藥品 (使用 H-1 隨垃圾丟棄)</option>
             <option value="special">特殊藥品 (使用 H-2 需檢收：抗生素/荷爾蒙/抗癌藥/管制藥)</option>
         </select>
     </div>
 
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700">原始文獻內容 (Source Content)</label>
-        <textarea id="sourceText" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm" placeholder="請在此貼上 UpToDate 或 Micromedex 的英文全文..."></textarea>
+    <div class="mb-2 p-4 border-2 border-dashed border-blue-300 rounded-lg bg-blue-50 hover:bg-blue-100 transition">
+        <label class="block text-sm font-bold text-blue-800 mb-2 cursor-pointer">
+            📄 點擊上傳 PDF 檔案 (UpToDate/Micromedex)
+            <input type="file" id="pdfInput" accept=".pdf" class="hidden" onchange="handlePdfUpload(this)">
+        </label>
+        <p id="uploadStatus" class="text-xs text-gray-500">支援 PDF 格式，解析將由瀏覽器本機執行。</p>
     </div>
 
-    <button onclick="generateAndCopy()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-200">
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">原始文獻內容 (Source Content)</label>
+        <textarea id="sourceText" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm" placeholder="上傳 PDF 後，文字會自動出現在這裡... 當然您也可以手動貼上。"></textarea>
+    </div>
+
+    <button onclick="generateAndCopy()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-200 shadow-md">
         生成 Prompt 並複製到剪貼簿 📋
     </button>
 
@@ -51,14 +75,65 @@
 </div>
 
 <script>
+    // --- PDF 解析功能 ---
+    async function handlePdfUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const statusElem = document.getElementById('uploadStatus');
+        const textArea = document.getElementById('sourceText');
+        
+        if (file.type !== 'application/pdf') {
+            alert('請上傳 PDF 檔案格式');
+            return;
+        }
+
+        try {
+            statusElem.innerHTML = '<span class="loader"></span>正在讀取 PDF 內容，請稍候...';
+            
+            // 讀取檔案為 ArrayBuffer
+            const arrayBuffer = await file.arrayBuffer();
+            
+            // 載入 PDF
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = "";
+
+            // 逐頁讀取
+            for (let i = 1; i <= pdf.numPages; i++) {
+                statusElem.innerHTML = `<span class="loader"></span>正在解析第 ${i} / ${pdf.numPages} 頁...`;
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                // 將該頁的文字片段組合成字串
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += `--- PAGE ${i} ---\n${pageText}\n\n`;
+            }
+
+            // 填入 TextArea
+            textArea.value = fullText;
+            statusElem.innerHTML = `✅ 成功解析：${file.name} (共 ${pdf.numPages} 頁)`;
+            statusElem.className = "text-xs text-green-600 font-bold";
+
+        } catch (error) {
+            console.error(error);
+            statusElem.innerHTML = `❌ 解析失敗：${error.message}`;
+            statusElem.className = "text-xs text-red-600 font-bold";
+            alert("PDF 解析發生錯誤，請確認檔案是否損毀或加密。");
+        }
+    }
+
+    // --- Prompt 生成功能 (維持不變) ---
     function generateAndCopy() {
-        // 1. 獲取輸入值
         const generic = document.getElementById('genericName').value;
         const brand = document.getElementById('brandName').value;
         const category = document.getElementById('drugCategory').value;
         const source = document.getElementById('sourceText').value;
 
-        // 2. 決定 H-1 或 H-2
+        if (!source.trim()) {
+            alert("請先上傳 PDF 或貼上原始文獻內容！");
+            return;
+        }
+
         let disposalInstruction = "";
         if (category === "general") {
             disposalInstruction = `【固定語句 H-1 (一般藥品)】
@@ -68,7 +143,6 @@
 本藥屬於特殊藥品（如抗生素、荷爾蒙、抗癌藥、管制藥等），請勿隨意丟棄。請將剩餘藥品拿回原醫療院所藥局或社區藥局進行檢收與回收處理。`;
         }
 
-        // 3. 組裝 Mega Prompt
         const prompt = `
 # Role
 你是一位台灣的專業藥物資訊（Drug Information, DI）藥師。你的任務是閱讀下方的【Input Data】，並依照【Strict Constraints】與【Output Template】製作一份繁體中文藥品衛教單張。
@@ -146,13 +220,11 @@ ${source}
 ${disposalInstruction}
 `;
 
-        // 4. 顯示與複製
         document.getElementById('outputPreview').textContent = prompt;
         
         navigator.clipboard.writeText(prompt).then(() => {
             alert("Prompt 已生成並複製！請貼上至 AI (ChatGPT/Gemini) 進行生成。");
         }).catch(err => {
-            console.error('複製失敗:', err);
             alert("複製失敗，請手動複製下方預覽文字。");
         });
     }
