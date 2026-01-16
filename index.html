@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DI 藥師衛教單張生成器 (v6.1 排版優化版)</title>
+    <title>DI 藥師衛教單張生成器 (v6.3 完美排版版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -29,10 +29,10 @@
 <div class="max-w-5xl mx-auto bg-white shadow-xl rounded-lg p-8">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-3xl font-bold text-blue-800">🏥 藥品衛教單張生成器</h1>
-        <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">v6.1 (排版優化)</span>
+        <span class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">v6.3 (排版分流：副作用用- / 其他用123)</span>
     </div>
     
-    <p class="text-gray-600 mb-6">依據院內標準範本，強化條列式排版 (Bullets & Lists) 與內容深度。</p>
+    <p class="text-gray-600 mb-6">依據院內習慣：副作用維持橫線條列，其餘注意事項自動編號 1) 2) 3)。</p>
 
     <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm">
         <label class="block text-sm font-bold text-yellow-800 mb-2 flex justify-between">
@@ -124,25 +124,19 @@
         input.type = input.type === "password" ? "text" : "password";
     }
 
-    // --- 自動偵測模型 ---
     async function detectModels() {
         const apiKey = document.getElementById('apiKey').value.trim();
         const statusElem = document.getElementById('modelStatus');
         const selectElem = document.getElementById('aiModel');
         const btn = document.getElementById('detectBtn');
-
         if (!apiKey) { alert("請先輸入 API Key！"); return; }
-
         btn.disabled = true;
         btn.innerHTML = '<span class="loader"></span> 查詢中...';
         statusElem.innerHTML = "正在查詢帳號權限...";
-
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
             const data = await response.json();
-
             if (data.error) throw new Error(data.error.message);
-
             selectElem.innerHTML = "";
             let count = 0;
             if (data.models) {
@@ -159,7 +153,6 @@
                     }
                 });
             }
-
             if (count > 0) {
                 statusElem.innerHTML = `✅ 成功載入 ${count} 個模型。`;
                 statusElem.className = "text-xs text-green-600 mt-2 font-bold";
@@ -176,7 +169,6 @@
         }
     }
 
-    // --- PDF 解析 ---
     async function handlePdfUpload(input) {
         const file = input.files[0];
         if (!file) return;
@@ -200,7 +192,7 @@
         }
     }
 
-    // --- AI 生成邏輯 (v6.1 排版增強版) ---
+    // --- AI 生成邏輯 (v6.3 分流排版) ---
     async function callAI() {
         const apiKey = document.getElementById('apiKey').value.trim();
         let modelName = document.getElementById('aiModel').value; 
@@ -216,16 +208,16 @@
         if (!source) { alert("內容是空的！"); document.getElementById('sourceText').focus(); return; }
 
         btn.disabled = true;
-        btn.innerHTML = `<span class="loader"></span> 排版撰寫中...`;
+        btn.innerHTML = `<span class="loader"></span> 撰寫中...`;
         resultSection.classList.remove('hidden');
-        outputDiv.innerHTML = "AI 正在整理資訊並進行條列式排版...";
+        outputDiv.innerHTML = "AI 正在進行格式化排版 (副作用用橫線，其餘用 1) 2) 3) )...";
         outputDiv.scrollIntoView({ behavior: 'smooth' });
 
         const disposalText = category === "general" 
             ? "本藥為「一般藥品」，目前國內多為高溫焚化爐，燃燒後均可將藥品完全處理並減少二次環境汙染，依衛生主管機關建議︰請將裸藥放入夾鍊袋或可封口的塑膠袋，同家中垃圾隨垃圾車丟棄；外包裝則依回收分類處理。"
             : "本藥屬於特殊藥品（如含針頭針劑、抗腫瘤藥品、抗生素、荷爾蒙藥品及管制藥品等），請勿隨意丟棄。請將剩餘藥品拿回醫療院所藥局或社區藥局進行檢收與回收處理。";
 
-        // Prompt v6.1: 加入排版指令
+        // Prompt v6.3: 明確區分編號規則
         const promptText = `
 你是一位台灣的專業藥物資訊（Drug Information, DI）藥師。請依照【標準範本】的格式與**排版風格**，製作一份繁體中文衛教單張。
 
@@ -237,25 +229,18 @@
 ${source.substring(0, 30000)}
 """
 
-# 排版與內容規範 (Formatting & Content Rules)
-1. **列表格式 (List Style)**：
-   - 凡是列舉多個項目（如副作用、禁忌症、檢查項目），**必須使用條列式排版**。
-   - 使用「•」或「-」作為項目符號，確保視覺清晰。
-   - 例如：
-     • 頭暈
-     • 噁心、嘔吐
-2. **交互作用 (Interactions)**：
-   - 必須模仿專業格式：列出「藥理分類」後，括號內列出「具體藥名」。
-   - 例如：抗凝血劑（如 warfarin）、抗生素（如 ciprofloxacin）。
-3. **獨立段落**：
-   - **葡萄柚**、**光敏感**、**乳糖賦型劑** 若有提及，必須像範本一樣單獨成段，不要混在其他注意事項中。
-4. **副作用**：
-   - 常見副作用與嚴重副作用必須分開。
-   - 嚴重副作用請分行條列，方便閱讀。
-5. **語氣**：
-   - 使用台灣醫療標準用語（如：遵醫囑、回診、禁忌）。
+# 關鍵排版邏輯 (Formatting Rules) - 請嚴格遵守
+1. **編號規則**：
+   - **注意事項、禁忌症、交互作用**：必須使用數字編號，格式為 **1) 2) 3)**。
+   - **副作用 (Side Effects)**：為了不讓病人誤會順序，**不可使用數字**，請使用 **「-」** (橫線) 符號條列。
 
-# 輸出模板 (請直接填寫內容，不要保留括號內的說明)
+2. **禁忌症 (Allergy)**：
+   - 第一點**必須**填空：「1) 曾經對本藥主成份 ${generic}、(若文獻提及特定賦型劑或成分如 Iodine/Lactose 請填入，否則省略)或其他成分過敏」。
+   
+3. **交互作用**：
+   - 格式：藥理分類（如 具體藥名）。例如：1) 抗凝血劑（如 warfarin）。
+
+# 輸出模板
 
 [學名]： ${generic}
 [商品名]： ${brand}
@@ -270,26 +255,23 @@ ${source.substring(0, 30000)}
 
 [注意事項]：
 若您有下列狀況，不可使用本藥：
-(請用條列式列出禁忌症)
+1) 曾經對本藥主成份 ${generic}、(填入文獻提及之賦型劑或成分，如碘、乳糖，若無則省略)或其他成分過敏。
+2) (接續列出其他禁忌症，使用 2) 3) ... 編號)
 
 若有下列情況，請確認已先告知您的醫師︰
-(請用條列式列出注意事項，包含懷孕、器官疾病等)
+(請使用 1) 2) 3) ... 格式條列注意事項)
 
 (若有賦型劑資訊，請填寫)：
 本藥內含(賦型劑名稱)，若您有相關不耐症，請務必告知你的醫師。
 
 請您將目前使用的藥品（包括市售成藥、各類營養食品以及中草藥等）告知醫師。尤其是下列藥品：
-(請用條列式列出，格式：藥物分類（如 藥名A、藥名B）)
+(請使用 1) 2) 3) ... 格式條列，格式：藥物分類（如 藥名A、藥名B）)
 這些藥物與本藥併用會互相影響療效或增加副作用的嚴重度，請務必先告知醫師。
 
 (若有生活警示)：
 本藥可能會引起(症狀)，在不確定本藥對您造成的影響前，請避免從事需專注力及協調力的活動，例如開車或操作危險器械。
 
-(若有葡萄柚警示)：
-服藥治療期間避免飲用葡萄柚汁或葡萄柚。因葡萄柚會抑制本藥代謝，導致本藥血中濃度大量提升而增加副作用發生機率及嚴重度。
-
-(若有光敏感警示)：
-本藥可能增加皮膚對紫外光之敏感度而導致皮膚紅腫等反應，建議您於服藥期間到停藥後數個月，勿於陽光下曝曬或曝露於人工紫外光下，並做好防曬措施。
+(若有葡萄柚/光敏感警示，請在此分段列出)
 
 (若有定期檢查)：
 使用本藥治療期間，醫師會幫您安排定期檢查，如︰(列出檢查項目)等，請務必在醫師為您安排的時間接受檢查。
@@ -298,10 +280,12 @@ ${source.substring(0, 30000)}
 副作用不一定會發生，但仍提醒您注意︰
 
 下列為較常發生但較不嚴重的副作用，若發生，請於回診時告知醫師；但若症狀持續、加重，或已造成您的困擾，請提前回診告知醫師：
-(請用條列式列出常見副作用)
+- (請使用「-」橫線條列常見副作用)
+- ...
 
 若您於服藥期間，發生下列罕見但較嚴重的副作用，請盡快就醫：
-(請用條列式列出嚴重副作用，一項一行)
+- (請使用「-」橫線條列嚴重副作用)
+- ...
 
 如果您發現上述未提及之副作用，且認為可能是本藥所造成，請於回診時告知醫師。
 
@@ -325,9 +309,7 @@ ${disposalText}
 
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
-            
             outputDiv.textContent = data.candidates[0].content.parts[0].text;
-
         } catch (err) {
             outputDiv.innerHTML = `<span class="text-red-600 font-bold">❌ 生成失敗：${err.message}</span>`;
         } finally {
