@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DI 藥師衛教單張自動化工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f3f4f6; }
+        .fixed-phrase { color: #b91c1c; font-weight: bold; font-size: 0.9em; }
+    </style>
+</head>
+<body class="p-6">
+
+<div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-8">
+    <h1 class="text-2xl font-bold text-blue-700 mb-2">🏥 藥品衛教單張 Prompt 生成器</h1>
+    <p class="text-gray-600 mb-6 text-sm">將 UpToDate/Micromedex 內容轉換為標準化 Prompt，供 AI 生成繁體中文衛教單張。</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700">指定學名 (Generic Name)</label>
+            <input type="text" id="genericName" placeholder="例如：Amiodarone HCl" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" value="Amiodarone HCl">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700">指定商品名 (Brand Name)</label>
+            <input type="text" id="brandName" placeholder="例如：Cordarone Tab 200 mg" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" value="Cordarone Tab 200 mg">
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">藥品廢棄類別 (決定廢棄語句)</label>
+        <select id="drugCategory" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 bg-gray-50">
+            <option value="general">一般藥品 (使用 H-1 隨垃圾丟棄)</option>
+            <option value="special">特殊藥品 (使用 H-2 需檢收：抗生素/荷爾蒙/抗癌藥/管制藥)</option>
+        </select>
+    </div>
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">原始文獻內容 (Source Content)</label>
+        <textarea id="sourceText" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm" placeholder="請在此貼上 UpToDate 或 Micromedex 的英文全文..."></textarea>
+    </div>
+
+    <button onclick="generateAndCopy()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-200">
+        生成 Prompt 並複製到剪貼簿 📋
+    </button>
+
+    <div class="mt-6 border-t pt-4">
+        <h3 class="text-lg font-semibold text-gray-700 mb-2">Prompt 預覽</h3>
+        <pre id="outputPreview" class="bg-gray-800 text-green-400 p-4 rounded text-xs overflow-auto h-64 whitespace-pre-wrap">尚未生成...</pre>
+    </div>
+</div>
+
+<script>
+    function generateAndCopy() {
+        // 1. 獲取輸入值
+        const generic = document.getElementById('genericName').value;
+        const brand = document.getElementById('brandName').value;
+        const category = document.getElementById('drugCategory').value;
+        const source = document.getElementById('sourceText').value;
+
+        // 2. 決定 H-1 或 H-2
+        let disposalInstruction = "";
+        if (category === "general") {
+            disposalInstruction = `【固定語句 H-1 (一般藥品)】
+本藥為「一般藥品」，目前國內多為高溫焚化爐，燃燒後均可將藥品完全處理並減少二次環境汙染，依衛生主管機關建議︰請將裸藥放入夾鍊袋或可封口的塑膠袋，同家中垃圾隨垃圾車丟棄；外包裝則依回收分類處理。`;
+        } else {
+            disposalInstruction = `【固定語句 H-2 (特殊藥品)】
+本藥屬於特殊藥品（如抗生素、荷爾蒙、抗癌藥、管制藥等），請勿隨意丟棄。請將剩餘藥品拿回原醫療院所藥局或社區藥局進行檢收與回收處理。`;
+        }
+
+        // 3. 組裝 Mega Prompt
+        const prompt = `
+# Role
+你是一位台灣的專業藥物資訊（Drug Information, DI）藥師。你的任務是閱讀下方的【Input Data】，並依照【Strict Constraints】與【Output Template】製作一份繁體中文藥品衛教單張。
+
+# Input Data
+1. **指定學名**：${generic}
+2. **指定商品名**：${brand}
+3. **來源文件**：
+"""
+${source}
+"""
+
+# Strict Constraints (嚴格規範)
+1. **語言**：繁體中文（台灣醫療用語，如：遵醫囑、回診）。
+2. **格式**：嚴格遵守下方模板結構，保留所有【固定語句】。
+3. **內容過濾**：
+   - 檢查原文是否提及 "Regular blood tests", "Liver function", "Thyroid", "Eye exam"。若有，必須輸出【固定語句 C】段落；若無則刪除該段。
+   - 檢查原文是否提及 "Dizziness", "Drowsiness", "Visual disturbance"。若有，必須輸出【固定語句 B】段落。
+   - 檢查原文是否提及 "Avoid grapefruit" 或 "Sunlight sensitivity"，務必列入注意事項。
+
+# Output Template (請填入以下格式)
+
+[學名]： ${generic}
+[商品名]： ${brand}
+[用途]： (請根據來源文件翻譯適應症)
+
+[使用方法]：
+(請根據來源文件翻譯用法，包含是否需隨餐服用)
+實際用法用量請遵醫囑使用。
+
+[忘了用藥怎麼辦？]
+(請根據來源文件 "Missed Dose" 區塊翻譯)
+
+[注意事項]：
+【固定語句 A】
+若您有下列狀況，不可使用本藥：(列出 Contraindications，如過敏、特定病史)
+
+若有下列情況，請確認已先告知您的醫師︰(列出 Precautions，如懷孕、哺乳、其他疾病)
+
+本藥賦型劑資訊：(若來源未提及可留空或寫無特殊註記)
+
+【固定語句 - 交互作用】
+請您將目前使用的藥品（包括市售成藥、各類營養食品以及中草藥等）告知醫師。尤其是(列出 Drug Interactions 藥物類別)等藥品。這些藥物與本藥併用會互相影響療效或增加副作用的嚴重度，請務必先告知醫師，讓醫師確認藥品如何開立。
+
+(若來源提及影響專注力/頭暈/視力，請填寫下方，否則省略)
+【固定語句 B】
+本藥可能會引起(填入症狀：如頭暈、視力模糊)，在不確定本藥對您造成的影響前，請避免從事需專注力及協調力的活動，例如開車或操作危險器械。
+
+(若來源提及需定期檢查，請填寫下方，否則省略)
+【固定語句 C】
+使用本藥治療期間，醫師會幫您安排定期檢查，如︰(填入檢查項目：如肝功能、甲狀腺、眼睛檢查)等，請務必在醫師為您安排的時間接受檢查。
+
+[可能的副作用]：
+副作用不一定會發生，但仍提醒您注意︰
+
+【固定語句 D】
+下列為較常發生但較不嚴重的副作用，若發生，請於回診時告知醫師；但若症狀持續、加重，或已造成您的困擾，請提前回診告知醫師：
+(列出 Common Side Effects)
+
+【固定語句 E】
+若您於服藥期間，發生下列罕見但較嚴重的副作用，請盡快就醫：
+(列出 Serious/Warning Side Effects)
+
+【固定語句 F】
+如果您發現上述未提及之副作用，且認為可能是本藥所造成，請於回診時告知醫師。
+
+[保存方法]：
+(根據 Storage 翻譯，如室溫、避光)
+
+【固定語句 G】
+請將藥品放置於兒童無法觸及處，以免造成誤服。
+請勿將藥品提供給他人使用。
+請於醫囑治療期間使用藥品，勿使用過期藥品。
+
+${disposalInstruction}
+`;
+
+        // 4. 顯示與複製
+        document.getElementById('outputPreview').textContent = prompt;
+        
+        navigator.clipboard.writeText(prompt).then(() => {
+            alert("Prompt 已生成並複製！請貼上至 AI (ChatGPT/Gemini) 進行生成。");
+        }).catch(err => {
+            console.error('複製失敗:', err);
+            alert("複製失敗，請手動複製下方預覽文字。");
+        });
+    }
+</script>
+
+</body>
+</html>
