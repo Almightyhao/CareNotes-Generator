@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DI 藥師衛教單張生成器 (v3.2 穩定版)</title>
+    <title>DI 藥師衛教單張生成器 (v3.3 模型全開版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -30,7 +30,7 @@
 <div class="max-w-5xl mx-auto bg-white shadow-xl rounded-lg p-8">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-3xl font-bold text-blue-700">🏥 藥品衛教單張生成器</h1>
-        <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">v3.2 (語句更新+模型修復)</span>
+        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">v3.3 (解決 404 Error)</span>
     </div>
     
     <p class="text-gray-600 mb-6">支援 UpToDate/Micromedex PDF 解析或純文字貼上，由 AI 自動生成院內格式單張。</p>
@@ -47,12 +47,16 @@
     </div>
 
     <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
-        <label class="block text-sm font-bold text-gray-700 mb-2">🤖 AI 模型 (若失敗請切換)</label>
-        <select id="aiModel" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 outline-none bg-white">
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash (推薦預設，速度快)</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro (推理能力較強，較慢)</option>
-            <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Exp (最新實驗版)</option>
+        <label class="block text-sm font-bold text-gray-700 mb-2">🤖 AI 模型選擇 (若出現 404 錯誤，請依序嘗試下方選項)</label>
+        <select id="aiModel" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 outline-none bg-white font-mono text-sm">
+            <option value="gemini-1.5-flash-002">Gemini 1.5 Flash-002 (最新穩定版，推薦優先嘗試)</option>
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash (通用名稱)</option>
+            <option value="gemini-1.5-flash-001">Gemini 1.5 Flash-001 (舊穩定版)</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro (通用名稱，較慢但強大)</option>
+            <option value="gemini-1.5-pro-002">Gemini 1.5 Pro-002 (最新 Pro 版)</option>
+            <option value="gemini-1.0-pro">Gemini 1.0 Pro (最舊穩定版，保底用)</option>
         </select>
+        <p class="text-xs text-red-500 mt-2">* 如果預設選項無法使用，請切換到 "Gemini 1.5 Flash (通用名稱)" 或 "Gemini 1.5 Pro" 再試一次。</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -176,7 +180,7 @@
         outputDiv.innerHTML = "AI 正在分析與撰寫，請稍候...";
         outputDiv.scrollIntoView({ behavior: 'smooth' });
 
-        // --- 修正後的廢棄語句邏輯 ---
+        // --- 廢棄語句邏輯 ---
         const disposalText = category === "general" 
             ? "【固定語句 H-1 (一般藥品)】\n本藥為「一般藥品」，目前國內多為高溫焚化爐，燃燒後均可將藥品完全處理並減少二次環境汙染，依衛生主管機關建議︰請將裸藥放入夾鍊袋或可封口的塑膠袋，同家中垃圾隨垃圾車丟棄；外包裝則依回收分類處理。"
             : "【固定語句 H-2 (特殊藥品)】\n本藥屬於特殊藥品（如含針頭針劑、抗腫瘤藥品、抗生素、荷爾蒙藥品及管制藥品等），請勿隨意丟棄。請將剩餘藥品拿回醫療院所藥局或社區藥局進行檢收與回收處理。";
@@ -280,14 +284,12 @@ ${disposalText}
         } catch (err) {
             outputDiv.innerHTML = `
                 <div class="bg-red-50 border border-red-200 p-4 rounded text-red-700">
-                    <p class="font-bold">❌ 生成失敗</p>
-                    <p class="text-sm mt-1 mb-2">原因：${err.message}</p>
+                    <p class="font-bold">❌ 生成失敗：模型名稱錯誤</p>
+                    <p class="text-sm mt-1 mb-2">Google 找不到您選擇的模型 "${modelName}"。</p>
+                    <p class="text-sm mt-1 mb-2">錯誤訊息：${err.message}</p>
                     <hr class="border-red-200 my-2">
-                    <p class="text-xs">
-                        <strong>建議解決方法：</strong><br>
-                        1. 請確認 API Key 是否正確。<br>
-                        2. 嘗試在上方「AI 模型」選單切換成 <strong>Gemini 1.5 Pro</strong> 再試一次。<br>
-                        3. 若仍失敗，請確認您的 API Key 是否有啟用該模型的權限。
+                    <p class="text-sm font-bold text-blue-800">
+                        👉 請嘗試在上方選單切換其他模型 (例如 Gemini 1.5 Flash-001 或 Pro 版)。
                     </p>
                 </div>`;
         } finally {
