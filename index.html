@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DI 藥師衛教單張生成器 (v3.3 模型全開版)</title>
+    <title>DI 藥師衛教單張生成器 (v4.0 自動偵測版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -30,33 +30,33 @@
 <div class="max-w-5xl mx-auto bg-white shadow-xl rounded-lg p-8">
     <div class="flex justify-between items-center mb-4">
         <h1 class="text-3xl font-bold text-blue-700">🏥 藥品衛教單張生成器</h1>
-        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">v3.3 (解決 404 Error)</span>
+        <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">v4.0 (自動偵測可用模型)</span>
     </div>
     
-    <p class="text-gray-600 mb-6">支援 UpToDate/Micromedex PDF 解析或純文字貼上，由 AI 自動生成院內格式單張。</p>
+    <p class="text-gray-600 mb-6">解決 "Model Not Found" 問題：請先輸入 Key，再點擊「偵測可用模型」。</p>
 
     <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm">
         <label class="block text-sm font-bold text-yellow-800 mb-2 flex justify-between">
-            <span>🔑 Google Gemini API Key (自動記憶)</span>
+            <span>🔑 Google Gemini API Key</span>
             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline text-xs">取得免費 Key</a>
         </label>
-        <div class="relative">
-            <input type="password" id="apiKey" oninput="saveApiKey()" placeholder="貼上您的 API Key (例如：AIzaSy...)" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none pr-10">
-            <button onclick="toggleKeyVisibility()" class="absolute right-2 top-2 text-gray-400 hover:text-gray-600">👁️</button>
+        <div class="flex gap-2">
+            <div class="relative flex-grow">
+                <input type="password" id="apiKey" oninput="saveApiKey()" placeholder="貼上您的 API Key (例如：AIzaSy...)" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none pr-10">
+                <button onclick="toggleKeyVisibility()" class="absolute right-2 top-2 text-gray-400 hover:text-gray-600">👁️</button>
+            </div>
+            <button onclick="detectModels()" id="detectBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold text-sm whitespace-nowrap shadow transition">
+                🔍 偵測可用模型
+            </button>
         </div>
+        <p id="modelStatus" class="text-xs text-gray-500 mt-2">請點擊右側按鈕，讓系統自動尋找您的帳號能使用哪些模型。</p>
     </div>
 
     <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
-        <label class="block text-sm font-bold text-gray-700 mb-2">🤖 AI 模型選擇 (若出現 404 錯誤，請依序嘗試下方選項)</label>
+        <label class="block text-sm font-bold text-gray-700 mb-2">🤖 AI 模型選擇</label>
         <select id="aiModel" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 outline-none bg-white font-mono text-sm">
-            <option value="gemini-1.5-flash-002">Gemini 1.5 Flash-002 (最新穩定版，推薦優先嘗試)</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash (通用名稱)</option>
-            <option value="gemini-1.5-flash-001">Gemini 1.5 Flash-001 (舊穩定版)</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro (通用名稱，較慢但強大)</option>
-            <option value="gemini-1.5-pro-002">Gemini 1.5 Pro-002 (最新 Pro 版)</option>
-            <option value="gemini-1.0-pro">Gemini 1.0 Pro (最舊穩定版，保底用)</option>
+            <option value="gemini-1.5-flash">預設 (若報錯請點擊上方偵測按鈕)</option>
         </select>
-        <p class="text-xs text-red-500 mt-2">* 如果預設選項無法使用，請切換到 "Gemini 1.5 Flash (通用名稱)" 或 "Gemini 1.5 Pro" 再試一次。</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -106,7 +106,6 @@
 </div>
 
 <script>
-    // --- 1. 初始化與 API Key 管理 ---
     const STORAGE_KEY = 'drug_info_gen_api_key';
 
     window.onload = function() {
@@ -126,43 +125,103 @@
         input.type = input.type === "password" ? "text" : "password";
     }
 
-    // --- 2. PDF 解析邏輯 ---
+    // --- 關鍵新功能：自動偵測模型 ---
+    async function detectModels() {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const statusElem = document.getElementById('modelStatus');
+        const selectElem = document.getElementById('aiModel');
+        const btn = document.getElementById('detectBtn');
+
+        if (!apiKey) {
+            alert("請先輸入 API Key 才能偵測！");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loader"></span> 查詢中...';
+        statusElem.innerHTML = "正在向 Google 查詢您的帳號權限...";
+        statusElem.className = "text-xs text-blue-600 mt-2 font-bold";
+
+        try {
+            // 呼叫 listModels API
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error.message);
+            }
+
+            // 清空下拉選單
+            selectElem.innerHTML = "";
+            let count = 0;
+
+            // 過濾出支援 generateContent 的模型
+            if (data.models) {
+                data.models.forEach(model => {
+                    if (model.supportedGenerationMethods && model.supportedGenerationMethods.includes("generateContent")) {
+                        // 排除一些舊的或不需要的模型 (如 embedding, vision-only)
+                        if (model.name.includes('gemini')) {
+                            const option = document.createElement("option");
+                            // model.name 格式通常是 "models/gemini-1.5-flash"
+                            // 我們只需要後半段 "gemini-1.5-flash"
+                            const shortName = model.name.replace("models/", "");
+                            option.value = shortName;
+                            option.text = `${model.displayName} (${shortName})`;
+                            selectElem.appendChild(option);
+                            count++;
+                        }
+                    }
+                });
+            }
+
+            if (count > 0) {
+                statusElem.innerHTML = `✅ 成功！已自動載入 ${count} 個可用模型。請直接點擊下方「開始生成」。`;
+                statusElem.className = "text-xs text-green-600 mt-2 font-bold";
+                // 自動選取第一個 (通常是最新的)
+                selectElem.selectedIndex = 0;
+            } else {
+                statusElem.innerHTML = "⚠️ 查詢成功，但找不到符合條件的模型。";
+                statusElem.className = "text-xs text-orange-600 mt-2 font-bold";
+            }
+
+        } catch (err) {
+            console.error(err);
+            statusElem.innerHTML = `❌ 偵測失敗：${err.message}。請確認 API Key 是否正確。`;
+            statusElem.className = "text-xs text-red-600 mt-2 font-bold";
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '🔍 偵測可用模型';
+        }
+    }
+
+    // --- PDF 解析邏輯 ---
     async function handlePdfUpload(input) {
         const file = input.files[0];
         if (!file) return;
-        
         const statusElem = document.getElementById('uploadStatus');
         const textArea = document.getElementById('sourceText');
-        
         try {
             statusElem.innerHTML = '<span class="loader"></span> 解析中...';
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             let fullText = "";
-
             for (let i = 1; i <= pdf.numPages; i++) {
-                statusElem.innerHTML = `<span class="loader"></span> 正在讀取第 ${i} / ${pdf.numPages} 頁...`;
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
                 fullText += `--- Page ${i} ---\n` + textContent.items.map(item => item.str).join(' ') + "\n\n";
             }
-
             textArea.value = fullText;
             statusElem.innerHTML = `✅ 成功載入：${file.name} (共 ${pdf.numPages} 頁)`;
             statusElem.className = "text-xs text-green-600 font-bold";
-            
         } catch (error) {
-            console.error(error);
             statusElem.innerHTML = `❌ 解析失敗：${error.message}`;
-            statusElem.className = "text-xs text-red-600 font-bold";
-            alert("PDF 解析失敗。您可以嘗試直接複製 PDF 文字貼上。");
         }
     }
 
-    // --- 3. AI 呼叫邏輯 ---
+    // --- AI 生成邏輯 ---
     async function callAI() {
         const apiKey = document.getElementById('apiKey').value.trim();
-        const modelName = document.getElementById('aiModel').value; 
+        let modelName = document.getElementById('aiModel').value; 
         const source = document.getElementById('sourceText').value.trim();
         const generic = document.getElementById('genericName').value;
         const brand = document.getElementById('brandName').value;
@@ -172,15 +231,14 @@
         const resultSection = document.getElementById('resultSection');
 
         if (!apiKey) { alert("請先輸入 API Key！"); document.getElementById('apiKey').focus(); return; }
-        if (!source) { alert("內容是空的！請先上傳 PDF 或直接貼上文獻內容。"); document.getElementById('sourceText').focus(); return; }
+        if (!source) { alert("內容是空的！"); document.getElementById('sourceText').focus(); return; }
 
         btn.disabled = true;
         btn.innerHTML = `<span class="loader"></span> 使用 ${modelName} 撰寫中...`;
         resultSection.classList.remove('hidden');
-        outputDiv.innerHTML = "AI 正在分析與撰寫，請稍候...";
+        outputDiv.innerHTML = "AI 正在思考中...";
         outputDiv.scrollIntoView({ behavior: 'smooth' });
 
-        // --- 廢棄語句邏輯 ---
         const disposalText = category === "general" 
             ? "【固定語句 H-1 (一般藥品)】\n本藥為「一般藥品」，目前國內多為高溫焚化爐，燃燒後均可將藥品完全處理並減少二次環境汙染，依衛生主管機關建議︰請將裸藥放入夾鍊袋或可封口的塑膠袋，同家中垃圾隨垃圾車丟棄；外包裝則依回收分類處理。"
             : "【固定語句 H-2 (特殊藥品)】\n本藥屬於特殊藥品（如含針頭針劑、抗腫瘤藥品、抗生素、荷爾蒙藥品及管制藥品等），請勿隨意丟棄。請將剩餘藥品拿回醫療院所藥局或社區藥局進行檢收與回收處理。";
@@ -264,7 +322,6 @@ ${disposalText}
 
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -272,26 +329,12 @@ ${disposalText}
             });
 
             const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
             
-            if (data.error) {
-                console.error("API Error Details:", data.error);
-                throw new Error(`[代碼: ${data.error.code}] ${data.error.message}`);
-            }
+            outputDiv.textContent = data.candidates[0].content.parts[0].text;
 
-            const aiText = data.candidates[0].content.parts[0].text;
-            outputDiv.textContent = aiText;
-            
         } catch (err) {
-            outputDiv.innerHTML = `
-                <div class="bg-red-50 border border-red-200 p-4 rounded text-red-700">
-                    <p class="font-bold">❌ 生成失敗：模型名稱錯誤</p>
-                    <p class="text-sm mt-1 mb-2">Google 找不到您選擇的模型 "${modelName}"。</p>
-                    <p class="text-sm mt-1 mb-2">錯誤訊息：${err.message}</p>
-                    <hr class="border-red-200 my-2">
-                    <p class="text-sm font-bold text-blue-800">
-                        👉 請嘗試在上方選單切換其他模型 (例如 Gemini 1.5 Flash-001 或 Pro 版)。
-                    </p>
-                </div>`;
+            outputDiv.innerHTML = `<span class="text-red-600 font-bold">❌ 生成失敗：${err.message}</span>`;
         } finally {
             btn.disabled = false;
             btn.innerHTML = '重新生成 🚀';
@@ -300,20 +343,9 @@ ${disposalText}
 
     function copyResult() {
         const text = document.getElementById('aiOutput').textContent;
-        navigator.clipboard.writeText(text).then(() => {
-            alert("✅ 內容已複製！");
-        });
+        navigator.clipboard.writeText(text).then(() => { alert("✅ 內容已複製！"); });
     }
 </script>
-<!-- 🔗 底部資訊 -->
-<footer style="text-align:center;margin:24px 0;color:#94a3b8;font-size:13px">
-  本工具原始碼與更新版可於 
-  <a href="https://github.com/Almightyhao/CareNotes-Generator" 
-     target="_blank" 
-     style="color:#60a5fa;text-decoration:none">
-     GitHub：Almightyhao/CareNotes-Generator
-  </a> 查找。
-</footer>
+
 </body>
 </html>
-
