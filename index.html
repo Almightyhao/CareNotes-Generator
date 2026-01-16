@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DI 藥師衛教單張生成器 (v4.0 自動偵測版)</title>
+    <title>DI 藥師衛教單張生成器 (v6.0 高精度擬真版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -22,18 +22,17 @@
             vertical-align: middle;
             margin-right: 5px;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="p-6">
 
 <div class="max-w-5xl mx-auto bg-white shadow-xl rounded-lg p-8">
     <div class="flex justify-between items-center mb-4">
-        <h1 class="text-3xl font-bold text-blue-700">🏥 藥品衛教單張生成器</h1>
-        <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">v4.0 (自動偵測可用模型)</span>
+        <h1 class="text-3xl font-bold text-blue-800">🏥 藥品衛教單張生成器</h1>
+        <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">v6.0 (高精度擬真版)</span>
     </div>
     
-    <p class="text-gray-600 mb-6">解決 "Model Not Found" 問題：請先輸入 Key，再點擊「偵測可用模型」。</p>
+    <p class="text-gray-600 mb-6">依據院內標準範本，深度解析交互作用、飲食禁忌與具體副作用。</p>
 
     <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm">
         <label class="block text-sm font-bold text-yellow-800 mb-2 flex justify-between">
@@ -49,13 +48,13 @@
                 🔍 偵測可用模型
             </button>
         </div>
-        <p id="modelStatus" class="text-xs text-gray-500 mt-2">請點擊右側按鈕，讓系統自動尋找您的帳號能使用哪些模型。</p>
+        <p id="modelStatus" class="text-xs text-gray-500 mt-2">建議使用 <strong>Gemini 1.5 Pro</strong> 以獲得最詳細的輸出。</p>
     </div>
 
     <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
         <label class="block text-sm font-bold text-gray-700 mb-2">🤖 AI 模型選擇</label>
         <select id="aiModel" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 outline-none bg-white font-mono text-sm">
-            <option value="gemini-1.5-flash">預設 (若報錯請點擊上方偵測按鈕)</option>
+            <option value="gemini-1.5-flash">預設 (若需要更詳細內容建議切換至 Pro)</option>
         </select>
     </div>
 
@@ -87,7 +86,7 @@
             </label>
             <span id="uploadStatus" class="text-xs text-gray-500">尚未上傳</span>
         </div>
-        <textarea id="sourceText" rows="12" class="w-full rounded-md border-gray-300 shadow-sm border p-3 text-sm font-mono bg-gray-50 focus:bg-white transition" placeholder="您可以：&#10;1. 點擊上方按鈕上傳 PDF，文字會自動出現在這裡。&#10;2. 或者直接將 UpToDate/Micromedex 的文字貼在這裡。&#10;3. 建議：若文字過長，可手動刪除後面的 Reference 參考文獻。"></textarea>
+        <textarea id="sourceText" rows="12" class="w-full rounded-md border-gray-300 shadow-sm border p-3 text-sm font-mono bg-gray-50 focus:bg-white transition" placeholder="您可以：&#10;1. 點擊上方按鈕上傳 PDF，文字會自動出現在這裡。&#10;2. 或者直接將 UpToDate/Micromedex 的文字貼在這裡。"></textarea>
     </div>
 
     <button onclick="callAI()" id="generateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-lg transition duration-200 shadow-md text-lg flex justify-center items-center">
@@ -96,7 +95,7 @@
 
     <div id="resultSection" class="mt-8 hidden">
         <div class="flex justify-between items-center mb-2 bg-green-50 p-2 rounded border border-green-200">
-            <h3 class="text-lg font-bold text-green-800">🎉 生成結果 (Final Output)</h3>
+            <h3 class="text-lg font-bold text-green-800">🎉 生成結果</h3>
             <button onclick="copyResult()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-bold flex items-center shadow">
                 📋 一鍵複製
             </button>
@@ -125,17 +124,14 @@
         input.type = input.type === "password" ? "text" : "password";
     }
 
-    // --- 關鍵新功能：自動偵測模型 ---
+    // --- 自動偵測模型 ---
     async function detectModels() {
         const apiKey = document.getElementById('apiKey').value.trim();
         const statusElem = document.getElementById('modelStatus');
         const selectElem = document.getElementById('aiModel');
         const btn = document.getElementById('detectBtn');
 
-        if (!apiKey) {
-            alert("請先輸入 API Key 才能偵測！");
-            return;
-        }
+        if (!apiKey) { alert("請先輸入 API Key！"); return; }
 
         btn.disabled = true;
         btn.innerHTML = '<span class="loader"></span> 查詢中...';
@@ -143,28 +139,19 @@
         statusElem.className = "text-xs text-blue-600 mt-2 font-bold";
 
         try {
-            // 呼叫 listModels API
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
             const data = await response.json();
 
-            if (data.error) {
-                throw new Error(data.error.message);
-            }
+            if (data.error) throw new Error(data.error.message);
 
-            // 清空下拉選單
             selectElem.innerHTML = "";
             let count = 0;
-
-            // 過濾出支援 generateContent 的模型
             if (data.models) {
                 data.models.forEach(model => {
                     if (model.supportedGenerationMethods && model.supportedGenerationMethods.includes("generateContent")) {
-                        // 排除一些舊的或不需要的模型 (如 embedding, vision-only)
                         if (model.name.includes('gemini')) {
-                            const option = document.createElement("option");
-                            // model.name 格式通常是 "models/gemini-1.5-flash"
-                            // 我們只需要後半段 "gemini-1.5-flash"
                             const shortName = model.name.replace("models/", "");
+                            const option = document.createElement("option");
                             option.value = shortName;
                             option.text = `${model.displayName} (${shortName})`;
                             selectElem.appendChild(option);
@@ -175,18 +162,15 @@
             }
 
             if (count > 0) {
-                statusElem.innerHTML = `✅ 成功！已自動載入 ${count} 個可用模型。請直接點擊下方「開始生成」。`;
+                statusElem.innerHTML = `✅ 成功！已自動載入 ${count} 個可用模型。`;
                 statusElem.className = "text-xs text-green-600 mt-2 font-bold";
-                // 自動選取第一個 (通常是最新的)
                 selectElem.selectedIndex = 0;
             } else {
-                statusElem.innerHTML = "⚠️ 查詢成功，但找不到符合條件的模型。";
+                statusElem.innerHTML = "⚠️ 查詢成功但無可用模型。";
                 statusElem.className = "text-xs text-orange-600 mt-2 font-bold";
             }
-
         } catch (err) {
-            console.error(err);
-            statusElem.innerHTML = `❌ 偵測失敗：${err.message}。請確認 API Key 是否正確。`;
+            statusElem.innerHTML = `❌ 偵測失敗：${err.message}`;
             statusElem.className = "text-xs text-red-600 mt-2 font-bold";
         } finally {
             btn.disabled = false;
@@ -194,7 +178,7 @@
         }
     }
 
-    // --- PDF 解析邏輯 ---
+    // --- PDF 解析 ---
     async function handlePdfUpload(input) {
         const file = input.files[0];
         if (!file) return;
@@ -218,7 +202,7 @@
         }
     }
 
-    // --- AI 生成邏輯 ---
+    // --- AI 生成邏輯 (v6.0 高精度 Prompt) ---
     async function callAI() {
         const apiKey = document.getElementById('apiKey').value.trim();
         let modelName = document.getElementById('aiModel').value; 
@@ -234,85 +218,97 @@
         if (!source) { alert("內容是空的！"); document.getElementById('sourceText').focus(); return; }
 
         btn.disabled = true;
-        btn.innerHTML = `<span class="loader"></span> 使用 ${modelName} 撰寫中...`;
+        btn.innerHTML = `<span class="loader"></span> 深度解析中...`;
         resultSection.classList.remove('hidden');
-        outputDiv.innerHTML = "AI 正在思考中...";
+        outputDiv.innerHTML = "AI 正在進行深度解析 (交互作用比對、副作用歸納)...";
         outputDiv.scrollIntoView({ behavior: 'smooth' });
 
+        // 廢棄語句
         const disposalText = category === "general" 
-            ? "【固定語句 H-1 (一般藥品)】\n本藥為「一般藥品」，目前國內多為高溫焚化爐，燃燒後均可將藥品完全處理並減少二次環境汙染，依衛生主管機關建議︰請將裸藥放入夾鍊袋或可封口的塑膠袋，同家中垃圾隨垃圾車丟棄；外包裝則依回收分類處理。"
-            : "【固定語句 H-2 (特殊藥品)】\n本藥屬於特殊藥品（如含針頭針劑、抗腫瘤藥品、抗生素、荷爾蒙藥品及管制藥品等），請勿隨意丟棄。請將剩餘藥品拿回醫療院所藥局或社區藥局進行檢收與回收處理。";
+            ? "本藥為「一般藥品」，目前國內多為高溫焚化爐，燃燒後均可將藥品完全處理並減少二次環境汙染，依衛生主管機關建議︰請將裸藥放入夾鍊袋或可封口的塑膠袋，同家中垃圾隨垃圾車丟棄；外包裝則依回收分類處理。"
+            : "本藥屬於特殊藥品（如含針頭針劑、抗腫瘤藥品、抗生素、荷爾蒙藥品及管制藥品等），請勿隨意丟棄。請將剩餘藥品拿回醫療院所藥局或社區藥局進行檢收與回收處理。";
 
+        // Prompt v6.0
         const promptText = `
-你是一位台灣的專業藥物資訊（Drug Information, DI）藥師。你的任務是閱讀提供的【原始文獻】，並依照【輸出模板】撰寫繁體中文衛教單張。
+你是一位台灣的專業藥物資訊（Drug Information, DI）藥師。你的任務是閱讀【原始文獻】，並產出與【標準範本】密度一致的繁體中文衛教單張。
 
 # 輸入資料
-1. 指定學名：${generic}
-2. 指定商品名：${brand}
-3. 原始文獻內容：
+1. 學名：${generic}
+2. 商品名：${brand}
+3. 原始文獻：
 """
 ${source.substring(0, 30000)}
 """
 
-# 嚴格規範
-1. 語言：繁體中文（台灣醫療用語）。
-2. **格式**：請直接輸出衛教單張內容，**不要**包含 Markdown 標題，也不要開場白或結尾。
-3. 必須保留所有【固定語句】標籤與內容。
-4. **邏輯判斷**：
-   - 檢查項目：若提及 LFTs, Thyroid, Eye exam，輸出【固定語句 C】；否則省略。
-   - 生活警示：若提及頭暈/視力模糊，輸出【固定語句 B】。
-   - 葡萄柚：若提及 "Avoid grapefruit"，列入交互作用。
+# 關鍵指令 (Critical Instructions) - 務必遵守
+1. **交互作用 (Interactions)**：
+   - 不要只列出藥理分類（如「抗生素」）。
+   - **必須**從文獻中找出具體的藥名成分，格式如：「分類（如：藥名 A、藥名 B）」。
+   - 若文獻列出了具體的藥名（如 ciprofloxacin, warfarin, digoxin 等），請務必翻譯並列出。
 
-# 輸出模板 (請填入內容)
+2. **獨立警示段落 (Distinct Warnings)**：
+   - 檢查文獻是否提及 **Grapefruit (葡萄柚)**。若有，必須建立獨立段落，並解釋原因（如：抑制代謝、增加濃度）。
+   - 檢查文獻是否提及 **Sunlight/Photosensitivity (光敏感)**。若有，必須建立獨立段落。
+   - 檢查文獻是否提及 **Lactose (乳糖)** 或其他重要賦型劑。若有，必須建立獨立段落。
+
+3. **副作用描述 (Side Effects)**：
+   - 請將醫學術語轉化為病人可理解的具體症狀。
+   - 例如：不要只寫「黃疸」，要寫「眼白、皮膚變黃、深色尿」。
+   - 例如：不要只寫「甲狀腺問題」，要寫「體重改變、脖子變粗、畏寒或畏熱」。
+
+4. **格式**：
+   - 直接輸出內容，不要有任何 Markdown 標籤（如 ###）。
+   - 語氣必須是親切但權威的衛教口吻。
+
+# 輸出模板 (請直接填寫內容)
 
 [學名]： ${generic}
 [商品名]： ${brand}
 [用途]： (翻譯適應症)
 
 [使用方法]：
-(翻譯用法，含隨餐指示)
+(翻譯用法，並註明隨餐或空腹的具體時間規範，如飯前1小時等)
 實際用法用量請遵醫囑使用。
 
 [忘了用藥怎麼辦？]
-(翻譯補服原則)
+(翻譯補服原則，通常為：想起時盡快補服，若接近下次時間則跳過，不可倍量)
 
 [注意事項]：
-【固定語句 A】
-若您有下列狀況，不可使用本藥：(列出禁忌症)
+若您有下列狀況，不可使用本藥：(詳列禁忌症，如過敏、特定心臟傳導阻滯級數、休克等)
 
-若有下列情況，請確認已先告知您的醫師︰(列出注意事項)
+若有下列情況，請確認已先告知您的醫師︰(詳列注意事項，包含懷孕、手術、電解質異常、器官疾病等)
 
-本藥賦型劑資訊：(若無資訊請填「無特殊註記」)
+(若文獻有賦型劑資訊如 Lactose，請在此輸出，否則留空)：
+本藥內含(填入賦型劑)，若您有(填入相關不耐症)的情形，請務必告知你的醫師。
 
-【固定語句 - 交互作用】
-請您將目前使用的藥品（包括市售成藥、各類營養食品以及中草藥等）告知醫師。尤其是(列出藥物類別)等藥品。這些藥物與本藥併用會互相影響療效或增加副作用的嚴重度，請務必先告知醫師，讓醫師確認藥品如何開立。
+請您將目前使用的藥品（包括市售成藥、各類營養食品以及中草藥等）告知醫師。尤其是(列出詳細交互作用，包含藥物分類與括號內的具體成分名)等藥品。這些藥物與本藥併用會互相影響療效或增加副作用的嚴重度，請務必先告知醫師，讓醫師確認藥品如何開立。
 
-(若需輸出生活警示，請填寫下方，否則留空)
-【固定語句 B】
-本藥可能會引起(填入症狀)，在不確定本藥對您造成的影響前，請避免從事需專注力及協調力的活動，例如開車或操作危險器械。
+(若需輸出生活警示，請插入下方段落)：
+本藥可能會引起(填入症狀，如頭暈)，在不確定本藥對您造成的影響前，請避免從事需專注力及協調力的活動，例如開車或操作危險器械。
 
-(若需輸出檢查警示，請填寫下方，否則留空)
-【固定語句 C】
-使用本藥治療期間，醫師會幫您安排定期檢查，如︰(列出檢查項目)等，請務必在醫師為您安排的時間接受檢查。
+(若文獻提及葡萄柚，請插入下方段落)：
+服藥治療期間避免飲用葡萄柚汁或葡萄柚。因葡萄柚會抑制本藥代謝，導致本藥血中濃度大量提升而增加副作用發生機率及嚴重度。
+
+(若文獻提及光敏感，請插入下方段落)：
+本藥可能增加皮膚對紫外光之敏感度而導致皮膚紅腫等反應，建議您於服藥期間到停藥後數個月，勿於陽光下曝曬或曝露於人工紫外光下，並做好防曬措施。
+
+(若文獻提及定期檢查，請插入下方段落)：
+使用本藥治療期間，醫師會幫您安排定期檢查，如︰(列出詳細檢查項目)等，請務必在醫師為您安排的時間接受檢查。
 
 [可能的副作用]：
 副作用不一定會發生，但仍提醒您注意︰
 
-【固定語句 D】
 下列為較常發生但較不嚴重的副作用，若發生，請於回診時告知醫師；但若症狀持續、加重，或已造成您的困擾，請提前回診告知醫師：
-(列出常見副作用)
+(列出常見副作用，描述要具體)
 
-【固定語句 E】
 若您於服藥期間，發生下列罕見但較嚴重的副作用，請盡快就醫：
-(列出嚴重副作用)
+(列出嚴重副作用，描述要具體，如過敏症狀、神經症狀、出血徵兆等)
 
-【固定語句 F】
 如果您發現上述未提及之副作用，且認為可能是本藥所造成，請於回診時告知醫師。
 
 [保存方法]：
 (翻譯保存條件)
 
-【固定語句 G】
 請將藥品放置於兒童無法觸及處，以免造成誤服。
 請勿將藥品提供給他人使用。
 請於醫囑治療期間使用藥品，勿使用過期藥品。
